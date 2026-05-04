@@ -1,0 +1,87 @@
+{
+  "name": "agent-memory",
+  "version": "1.0.0",
+  "description": "Universal AI IDE Memory System - Persistent memory for Cursor, Windsurf, Aider, Kilo, Continue.dev, Cline, and more",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "agent-memory": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "start:worker": "node dist/worker/index.js",
+    "install:ide": "node dist/cli.js install",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist",
+    "db:migrate": "node dist/database/migrate.js",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "ide",
+    "cursor",
+    "windsurf",
+    "aider",
+    "kilo",
+    "continue",
+    "cline",
+    "claude",
+    "persistent-memory",
+    "mcp",
+    "sqlite",
+    "vector-search"
+  ],
+  "author": "PREETHAM1590",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PREETHAM1590/Agent-Memory.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^5.3.0",
+    "chromadb": "^1.8.0",
+    "commander": "^12.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "glob": "^10.3.0",
+    "gray-matter": "^4.0.3",
+    "handlebars": "^4.7.8",
+    "js-yaml": "^4.1.0",
+    "marked": "^12.0.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.0.0",
+    "ora": "^8.0.0",
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^9.0.0",
+    "ws": "^8.16.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vitepress": "^1.0.0",
+    "vitest": "^1.2.0"
+  }
+}
