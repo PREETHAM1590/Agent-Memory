@@ -1,6 +1,6 @@
 {
   "name": "@preetham1590/agent-memory-ai",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Universal AI IDE Memory System - Auto-detect and install for Cursor, Windsurf, Kilo, Aider, Continue, Cline, Claude Code, Gemini CLI, and more",
   "type": "module",
   "main": "dist/index.js",
