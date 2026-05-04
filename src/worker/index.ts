@@ -17,11 +17,13 @@ export class WorkerService {
   private config: Config;
   private clients: Set<WebSocket> = new Set();
   private authToken: string | null;
+  private safeMode: boolean;
 
   constructor(db: MemoryDatabase, config: Config) {
     this.db = db;
     this.config = config;
     this.authToken = config.authToken || process.env.AGENT_MEMORY_TOKEN || null;
+    this.safeMode = config.safeMode === true;
     this.app = express();
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
@@ -98,6 +100,10 @@ export class WorkerService {
     });
 
     this.app.post('/api/observations', this.authMiddleware.bind(this), (req, res) => {
+      if (this.safeMode) {
+        res.status(403).json({ error: 'Operation disabled in safe mode' });
+        return;
+      }
       const id = this.db.storeObservation(req.body);
       const obs = this.db.getObservation(id);
 
@@ -207,6 +213,17 @@ export class WorkerService {
     this.app.get('/api/webhooks', this.authMiddleware.bind(this), (req, res) => {
       const webhooks = this.db.getWebhooks();
       res.json(webhooks);
+    });
+
+    this.app.get('/api/config', this.authMiddleware.bind(this), (req, res) => {
+      const sanitized = { ...this.config };
+      delete (sanitized as any).authToken;
+      res.json(sanitized);
+    });
+
+    this.app.patch('/api/config', this.authMiddleware.bind(this), (req, res) => {
+      if (req.body.port !== undefined) this.config.port = req.body.port;
+      res.json({ ...this.config, authToken: undefined });
     });
   }
 

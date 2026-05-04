@@ -19,6 +19,8 @@ export class MCPServer {
   private brain: AgentBrainSystem;
   private initializer: SessionInitializer;
   private sessionStarted: boolean = false;
+  private rateLimitMap: Map<string, { count: number; resetAt: number }> = new Map();
+  private cleanupInterval?: NodeJS.Timeout;
 
   constructor(db: MemoryDatabase) {
     this.db = db;
@@ -30,6 +32,32 @@ export class MCPServer {
       { capabilities: { tools: {} } }
     );
     this.setupHandlers();
+    this.startCleanupInterval();
+  }
+
+  private checkRateLimit(sessionId: string): boolean {
+    const now = Date.now();
+    const entry = this.rateLimitMap.get(sessionId);
+    if (!entry || now > entry.resetAt) {
+      this.rateLimitMap.set(sessionId, { count: 1, resetAt: now + 60000 });
+      return true;
+    }
+    if (entry.count >= 30) {
+      return false;
+    }
+    entry.count++;
+    return true;
+  }
+
+  private startCleanupInterval(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.rateLimitMap.entries()) {
+        if (now > entry.resetAt) {
+          this.rateLimitMap.delete(key);
+        }
+      }
+    }, 60000);
   }
 
   private setupHandlers(): void {
@@ -157,6 +185,13 @@ export class MCPServer {
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+      const sessionId = (request.params as any).sessionId || 'default';
+
+      if (!this.checkRateLimit(sessionId)) {
+        return {
+          content: [{ type: 'text', text: 'Rate limit exceeded. Max 30 requests per minute.' }]
+        };
+      }
 
       try {
         switch (name) {
