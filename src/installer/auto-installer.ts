@@ -517,4 +517,39 @@ try {
     console.log('\n' + '─'.repeat(50));
     console.log(`\nTotal: ${detected.length} detected, ${notDetected.length} not found\n`);
   }
+
+  uninstallFromIDE(ide: IDEType): void {
+    const config = IDE_CONFIGS[ide];
+    if (!config) {
+      throw new Error(`Unknown IDE: ${ide}`);
+    }
+
+    const ideDir = join(this.homeDir, config.configDir);
+    
+    for (const configFile of config.configFiles) {
+      const configPath = join(ideDir, configFile);
+      
+      if (existsSync(configPath)) {
+        try {
+          const existing = JSON.parse(readFileSync(configPath, 'utf-8'));
+          
+          if (existing.mcpServers && existing.mcpServers['agent-memory']) {
+            delete existing.mcpServers['agent-memory'];
+            writeFileSync(configPath, JSON.stringify(existing, null, 2));
+          }
+        } catch {}
+      }
+    }
+
+    const rulesPath = join(process.cwd(), config.rulesFile);
+    if (existsSync(rulesPath)) {
+      try {
+        const content = readFileSync(rulesPath, 'utf-8');
+        if (content.includes('Agent-Memory')) {
+          const fs = require('fs');
+          fs.unlinkSync(rulesPath);
+        }
+      } catch {}
+    }
+  }
 }

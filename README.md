@@ -5,14 +5,14 @@
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-green.svg)
 
 **Agent-Memory** is a universal memory system for ALL AI IDEs. One command auto-detects all installed IDEs on your system and installs Agent-Memory for each one.
 
 ## One-Line Install (Auto-Detect All IDEs)
 
 ```bash
-npx agent-memory install
+npx @preetham1590/agent-memory-ai install
 ```
 
 That's it! Agent-Memory will:
@@ -39,22 +39,31 @@ That's it! Agent-Memory will:
 
 ```bash
 # Auto-detect and install for ALL detected IDEs
-npx agent-memory install
+npx @preetham1590/agent-memory-ai install
 
 # Just detect what's installed (no changes)
-npx agent-memory detect
+npx @preetham1590/agent-memory-ai detect
 
 # Install for a specific IDE
-npx agent-memory install --ide cursor
+npx @preetham1590/agent-memory-ai install --ide cursor
 
 # Install for ALL supported IDEs (even if not detected)
-npx agent-memory install --all
+npx @preetham1590/agent-memory-ai install --all
 
 # Start the memory worker
-npx agent-memory start
+npx @preetham1590/agent-memory-ai start
 
 # Open web dashboard
-npx agent-memory web
+npx @preetham1590/agent-memory-ai web
+
+# Update to latest version
+npx @preetham1590/agent-memory-ai update
+
+# Uninstall from all IDEs
+npx @preetham1590/agent-memory-ai uninstall
+
+# Uninstall but keep your data
+npx @preetham1590/agent-memory-ai uninstall --keep-data
 ```
 
 ## Platform Support
@@ -67,7 +76,7 @@ npx agent-memory web
 # - Config folders in %USERPROFILE%
 # - PATH (using 'where' command)
 
-npx agent-memory install
+npx @preetham1590/agent-memory-ai install
 ```
 
 ### macOS
@@ -78,7 +87,7 @@ npx agent-memory install
 # - Config folders in ~
 # - PATH (using 'which' command)
 
-npx agent-memory install
+npx @preetham1590/agent-memory-ai install
 ```
 
 ### Linux
@@ -88,7 +97,7 @@ npx agent-memory install
 # - PATH (using 'which' command)
 # - /usr/bin, /usr/local/bin, /snap/bin
 
-npx agent-memory install
+npx @preetham1590/agent-memory-ai install
 ```
 
 ## Features
@@ -114,14 +123,19 @@ npx agent-memory install
 
 | Command | Description |
 |---------|-------------|
-| `npx agent-memory install` | Auto-detect and install for all detected IDEs |
-| `npx agent-memory detect` | List all detected IDEs (no changes) |
-| `npx agent-memory start` | Start the memory worker on port 37800 |
-| `npx agent-memory web` | Open the web dashboard |
-| `npx agent-memory search "query"` | Search memory |
-| `npx agent-memory stats` | Show memory statistics |
-| `npx agent-memory export json` | Export all memories |
-| `npx agent-memory list-ides` | List all supported IDEs |
+| `npx @preetham1590/agent-memory-ai install` | Auto-detect and install for all detected IDEs |
+| `npx @preetham1590/agent-memory-ai detect` | List all detected IDEs (no changes) |
+| `npx @preetham1590/agent-memory-ai start` | Start the memory worker on port 37800 |
+| `npx @preetham1590/agent-memory-ai web` | Open the web dashboard |
+| `npx @preetham1590/agent-memory-ai search "query"` | Search memory |
+| `npx @preetham1590/agent-memory-ai stats` | Show memory statistics |
+| `npx @preetham1590/agent-memory-ai export json` | Export all memories |
+| `npx @preetham1590/agent-memory-ai list-ides` | List all supported IDEs |
+| `npx @preetham1590/agent-memory-ai update` | Update to the latest version |
+| `npx @preetham1590/agent-memory-ai update --version 1.2.0` | Update to a specific version |
+| `npx @preetham1590/agent-memory-ai uninstall` | Remove from all IDEs and clean data |
+| `npx @preetham1590/agent-memory-ai uninstall --keep-data` | Remove from IDEs but keep data |
+| `npx @preetham1590/agent-memory-ai uninstall --ide cursor` | Remove from specific IDE only |
 
 ## After Installation
 

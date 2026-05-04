@@ -29,10 +29,12 @@ function getConfig() {
   };
 }
 
+import { execSync } from 'child_process';
+
 program
   .name('agent-memory')
   .description('Universal AI IDE Memory System - Auto-detect and install for all your IDEs')
-  .version('1.0.0');
+  .version('1.1.0');
 
 program
   .command('install')
@@ -351,6 +353,84 @@ program
     }
     
     console.log('\n');
+  });
+
+program
+  .command('update')
+  .description('Update Agent-Memory to the latest version')
+  .option('-v, --version <version>', 'Specific version to update to')
+  .action(async (options) => {
+    console.log('\n🔄 Updating Agent-Memory...\n');
+    
+    try {
+      const pkgName = '@preetham1590/agent-memory-ai';
+      
+      if (options.version) {
+        console.log(`  Installing version ${options.version}...`);
+        execSync(`npm install -g ${pkgName}@${options.version}`, { stdio: 'inherit' });
+      } else {
+        console.log('  Checking for latest version...');
+        execSync(`npm install -g ${pkgName}@latest`, { stdio: 'inherit' });
+      }
+      
+      console.log('\n✅ Agent-Memory updated successfully!\n');
+      console.log('  Run "npx @preetham1590/agent-memory-ai --version" to verify\n');
+    } catch (error: any) {
+      console.log(`\n❌ Update failed: ${error.message}\n`);
+      console.log('  Try running with admin/sudo privileges\n');
+    }
+  });
+
+program
+  .command('uninstall')
+  .description('Remove Agent-Memory from all IDEs and clean up')
+  .option('-k, --keep-data', 'Keep memory database and config', false)
+  .option('-i, --ide <ide>', 'Uninstall from specific IDE only')
+  .option('-a, --all', 'Remove from ALL supported IDEs (not just detected)', false)
+  .action(async (options) => {
+    const installer = new AutoInstaller();
+    const agentMemoryDir = join(homedir(), '.agent-memory');
+    
+    console.log('\n🗑️  Uninstalling Agent-Memory...\n');
+    
+    const detected = installer.detectAllIDEs();
+    const toRemove = options.all 
+      ? detected 
+      : options.ide 
+        ? detected.filter(d => d.ide === options.ide)
+        : detected.filter(d => d.installed);
+    
+    if (toRemove.length === 0) {
+      console.log('  ⚠️  No IDEs to uninstall from.\n');
+      return;
+    }
+    
+    for (const { ide, name, installed } of toRemove) {
+      if (!installed && !options.all) continue;
+      
+      console.log(`  📦 Removing from ${name}...`);
+      try {
+        installer.uninstallFromIDE(ide);
+        console.log(`     ✅ Removed`);
+      } catch (error: any) {
+        console.log(`     ⚠️  ${error.message}`);
+      }
+    }
+    
+    if (!options.keepData) {
+      console.log('\n  🧹 Cleaning up data directory...');
+      try {
+        const fs = await import('fs');
+        fs.rmSync(agentMemoryDir, { recursive: true, force: true });
+        console.log('     ✅ Data removed');
+      } catch (error: any) {
+        console.log(`     ⚠️  Could not remove data: ${error.message}`);
+      }
+    } else {
+      console.log('\n  📁 Data preserved at: ' + agentMemoryDir);
+    }
+    
+    console.log('\n✅ Uninstall complete!\n');
   });
 
 program.parse();
