@@ -34,7 +34,7 @@ import { execSync } from 'child_process';
 program
   .name('agent-memory')
   .description('Universal AI IDE Memory System - Auto-detect and install for all your IDEs')
-  .version('1.1.0');
+  .version('1.2.0');
 
 program
   .command('install')
