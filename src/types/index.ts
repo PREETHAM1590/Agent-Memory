@@ -118,6 +118,7 @@ export interface AnalyticsConfig {
 export interface Config {
   port: number;
   database: string;
+  authToken?: string;
   cloudSync: CloudSyncConfig;
   summarization: SummarizationConfig;
   analytics: AnalyticsConfig;
@@ -129,6 +130,7 @@ export interface Config {
     enabled: boolean;
   };
   plugins: string[];
+  safeMode?: boolean;
 }
 
 export interface Webhook {

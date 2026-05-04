@@ -1,6 +1,6 @@
-import { execSync } from 'child_process';
-import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { execSync, execFileSync } from 'child_process';
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, unlinkSync } from 'fs';
+import { join, basename } from 'path';
 import { homedir, platform } from 'os';
 import { IDEType } from '../types/index.js';
 
@@ -342,18 +342,20 @@ export class AutoInstaller {
         port: 37800,
         database: join(this.agentMemoryDir, 'data', 'memory.db'),
         cloudSync: { enabled: false, provider: 'none' },
-        summarization: { enabled: true, compressionLevel: 'medium' },
+        summarization: { enabled: false, compressionLevel: 'medium' },
         learning: { enabled: true, patternExtraction: true },
         plugins: []
       }, null, 2));
     }
   }
 
-  private async installForIDE(ide: IDEType): Promise<void> {
+  async installForIDE(ide: IDEType): Promise<void> {
     const config = IDE_CONFIGS[ide];
     if (!config) {
       throw new Error(`Unknown IDE: ${ide}`);
     }
+
+    this.ensureAgentMemoryDir();
 
     const ideDir = join(this.homeDir, config.configDir);
     if (!existsSync(ideDir)) {
@@ -383,6 +385,9 @@ export class AutoInstaller {
       let existing: any = {};
 
       if (existsSync(configPath)) {
+        // Create backup before modifying
+        this.backupConfigFile(configPath);
+
         try {
           existing = JSON.parse(readFileSync(configPath, 'utf-8'));
         } catch {
@@ -518,23 +523,277 @@ try {
     console.log(`\nTotal: ${detected.length} detected, ${notDetected.length} not found\n`);
   }
 
-  uninstallFromIDE(ide: IDEType): void {
+  backupConfigFile(filePath: string): string | null {
+    if (!existsSync(filePath)) return null;
+    const backupDir = join(this.agentMemoryDir, 'backups');
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupPath = join(backupDir, `${basename(filePath)}.agent-memory-backup-${timestamp}`);
+    try {
+      copyFileSync(filePath, backupPath);
+      return backupPath;
+    } catch {
+      return null;
+    }
+  }
+
+  restoreBackup(filePath: string, backupPath: string): boolean {
+    if (!existsSync(backupPath)) return false;
+    try {
+      copyFileSync(backupPath, filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  validateConfig(filePath: string): { valid: boolean; error?: string } {
+    if (!existsSync(filePath)) {
+      return { valid: false, error: 'File does not exist' };
+    }
+    try {
+      const content = readFileSync(filePath, 'utf-8').trim();
+      if (!content) {
+        return { valid: false, error: 'File is empty' };
+      }
+      JSON.parse(content);
+      return { valid: true };
+    } catch (e: any) {
+      return { valid: false, error: `Invalid JSON: ${e.message}` };
+    }
+  }
+
+  dryRunInstall(ide: IDEType): { wouldModify: boolean; files: string[]; backups: string[] } {
+    const config = IDE_CONFIGS[ide];
+    const result: { wouldModify: boolean; files: string[]; backups: string[] } = {
+      wouldModify: false,
+      files: [],
+      backups: []
+    };
+
+    if (!config) return result;
+
+    const ideDir = join(this.homeDir, config.configDir);
+
+    for (const configFile of config.configFiles) {
+      const configPath = join(ideDir, configFile);
+      result.files.push(configPath);
+    }
+
+    result.wouldModify = result.files.length > 0;
+    return result;
+  }
+
+  verifyInstall(ide: IDEType): { installed: boolean; issue?: string } {
+    const config = IDE_CONFIGS[ide];
+    if (!config) return { installed: false, issue: 'Unknown IDE' };
+
+    const ideDir = join(this.homeDir, config.configDir);
+
+    for (const configFile of config.configFiles) {
+      const configPath = join(ideDir, configFile);
+      if (!existsSync(configPath)) {
+        return { installed: false, issue: `Missing config: ${configFile}` };
+      }
+      const validation = this.validateConfig(configPath);
+      if (!validation.valid) {
+        return { installed: false, issue: `Invalid config ${configFile}: ${validation.error}` };
+      }
+      try {
+        const content = JSON.parse(readFileSync(configPath, 'utf-8'));
+        if (!content.mcpServers?.['agent-memory']) {
+          return { installed: false, issue: `Missing agent-memory entry in ${configFile}` };
+        }
+      } catch {
+        return { installed: false, issue: `Cannot parse ${configFile}` };
+      }
+    }
+
+    return { installed: true };
+  }
+
+  doctorCheck(): {
+    nodeVersion: string;
+    packageVersion: string;
+    database: { exists: boolean; path: string; size: number };
+    worker: { running: boolean; port?: number };
+    ides: { ide: IDEType; name: string; installed: boolean; issue?: string }[];
+    config: { exists: boolean; valid: boolean; path: string; error?: string };
+    backups: { path: string; exists: boolean }[];
+    issues: string[];
+  } {
+    const issues: string[] = [];
+    const configPath = join(this.agentMemoryDir, 'config.json');
+    const dbPath = join(this.agentMemoryDir, 'data', 'memory.db');
+    const backupDir = join(this.agentMemoryDir, 'backups');
+
+    const nodeVersion = process.version;
+
+    let packageVersion = 'unknown';
+    try {
+      const pkgPath = join(process.cwd(), 'package.json');
+      if (existsSync(pkgPath)) {
+        packageVersion = JSON.parse(readFileSync(pkgPath, 'utf-8')).version;
+      }
+    } catch {}
+
+    const dbExists = existsSync(dbPath);
+    let dbSize = 0;
+    if (dbExists) {
+      try { dbSize = statSync(dbPath).size; } catch {}
+    }
+
+    const configExists = existsSync(configPath);
+    let configValid = false;
+    let configError: string | undefined;
+    if (configExists) {
+      const validation = this.validateConfig(configPath);
+      configValid = validation.valid;
+      configError = validation.error;
+      if (!configValid) issues.push(`Config file is invalid: ${configError}`);
+    } else {
+      issues.push('Config file not found');
+    }
+
+    let workerRunning = false;
+    let workerPort: number | undefined;
+    if (configExists) {
+      try {
+        const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+        workerPort = config.port || 37800;
+      } catch {}
+    }
+    if (!workerPort) workerPort = 37800;
+
+    const detected = this.detectAllIDEs();
+    const ides = detected.map(d => {
+      if (!d.installed) return { ...d, issue: 'Not detected on system' };
+      const verify = this.verifyInstall(d.ide);
+      return { ide: d.ide, name: d.name, installed: verify.installed, issue: verify.issue };
+    });
+
+    for (const ide of ides) {
+      if (ide.installed && ide.issue) {
+        issues.push(`${ide.name}: ${ide.issue}`);
+      }
+    }
+
+    let backups: { path: string; exists: boolean }[] = [];
+    if (existsSync(backupDir)) {
+      backups = readdirSync(backupDir)
+        .filter(f => f.includes('.agent-memory-backup'))
+        .map(f => ({ path: join(backupDir, f), exists: true }));
+    }
+
+    return {
+      nodeVersion,
+      packageVersion,
+      database: { exists: dbExists, path: dbPath, size: dbSize },
+      worker: { running: workerRunning, port: workerPort },
+      config: { exists: configExists, valid: configValid, path: configPath, error: configError },
+      ides,
+      backups,
+      issues
+    };
+  }
+
+  repairIDE(ide: IDEType): { fixed: boolean; actions: string[] } {
+    const config = IDE_CONFIGS[ide];
+    const actions: string[] = [];
+
+    if (!config) {
+      return { fixed: false, actions: ['Unknown IDE'] };
+    }
+
+    const ideDir = join(this.homeDir, config.configDir);
+
+    for (const configFile of config.configFiles) {
+      const configPath = join(ideDir, configFile);
+      const validation = this.validateConfig(configPath);
+
+      if (!validation.valid || !existsSync(configPath)) {
+        if (existsSync(configPath) && !validation.valid) {
+          const backupDir = join(this.agentMemoryDir, 'backups');
+          if (existsSync(backupDir)) {
+            const backups = readdirSync(backupDir)
+              .filter(f => f.startsWith(basename(configPath)));
+            if (backups.length > 0) {
+              const latest = backups.sort().reverse()[0];
+              this.restoreBackup(configPath, join(backupDir, latest));
+              actions.push(`Restored ${configFile} from backup: ${latest}`);
+              continue;
+            }
+          }
+          writeFileSync(configPath, JSON.stringify({ mcpServers: {} }, null, 2));
+          actions.push(`Recreated ${configFile} (no backup available)`);
+        } else {
+          if (!existsSync(ideDir)) mkdirSync(ideDir, { recursive: true });
+          writeFileSync(configPath, JSON.stringify({ mcpServers: {} }, null, 2));
+          actions.push(`Created missing ${configFile}`);
+        }
+      }
+    }
+
+    for (const configFile of config.configFiles) {
+      const configPath = join(ideDir, configFile);
+      if (existsSync(configPath)) {
+        try {
+          const content = JSON.parse(readFileSync(configPath, 'utf-8'));
+          if (!content.mcpServers) content.mcpServers = {};
+          content.mcpServers['agent-memory'] = {
+            command: 'npx',
+            args: ['-y', '@preetham1590/agent-memory-ai', 'mcp'],
+            env: {
+              AGENT_MEMORY_DB: join(this.agentMemoryDir, 'data', 'memory.db')
+            }
+          };
+          writeFileSync(configPath, JSON.stringify(content, null, 2));
+          actions.push(`Added agent-memory MCP entry to ${configFile}`);
+        } catch {}
+      }
+    }
+
+    return { fixed: actions.length > 0, actions };
+  }
+
+  uninstallFromIDE(ide: IDEType, restoreBackup: boolean = false): { removed: boolean; restoredFrom?: string } {
     const config = IDE_CONFIGS[ide];
     if (!config) {
       throw new Error(`Unknown IDE: ${ide}`);
     }
 
     const ideDir = join(this.homeDir, config.configDir);
-    
+    let restoredFrom: string | undefined;
+
     for (const configFile of config.configFiles) {
       const configPath = join(ideDir, configFile);
-      
+
       if (existsSync(configPath)) {
+        // Try backup restore first
+        if (restoreBackup) {
+          const backupDir = join(this.agentMemoryDir, 'backups');
+          if (existsSync(backupDir)) {
+            const backups = readdirSync(backupDir)
+              .filter(f => f.startsWith(basename(configPath)));
+            if (backups.length > 0) {
+              const latest = backups.sort().reverse()[0];
+              if (this.restoreBackup(configPath, join(backupDir, latest))) {
+                restoredFrom = latest;
+                continue;
+              }
+            }
+          }
+        }
+
+        // Remove only agent-memory entry
         try {
           const existing = JSON.parse(readFileSync(configPath, 'utf-8'));
-          
+
           if (existing.mcpServers && existing.mcpServers['agent-memory']) {
             delete existing.mcpServers['agent-memory'];
+            // If mcpServers is now empty, keep it valid
             writeFileSync(configPath, JSON.stringify(existing, null, 2));
           }
         } catch {}
@@ -546,10 +805,11 @@ try {
       try {
         const content = readFileSync(rulesPath, 'utf-8');
         if (content.includes('Agent-Memory')) {
-          const fs = require('fs');
-          fs.unlinkSync(rulesPath);
+          unlinkSync(rulesPath);
         }
       } catch {}
     }
+
+    return { removed: true, restoredFrom };
   }
 }

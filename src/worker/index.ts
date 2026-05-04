@@ -2,8 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { MemoryDatabase } from '../database/index.js';
 import { Observation, Config, WebhookEvent } from '../types/index.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export class WorkerService {
   private app: express.Application;
@@ -12,10 +16,12 @@ export class WorkerService {
   private db: MemoryDatabase;
   private config: Config;
   private clients: Set<WebSocket> = new Set();
+  private authToken: string | null;
 
   constructor(db: MemoryDatabase, config: Config) {
     this.db = db;
     this.config = config;
+    this.authToken = config.authToken || process.env.AGENT_MEMORY_TOKEN || null;
     this.app = express();
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
@@ -24,23 +30,46 @@ export class WorkerService {
     this.setupWebSocket();
   }
 
+  private authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
+    if (!this.authToken) {
+      next();
+      return;
+    }
+    const providedToken = req.headers['x-agent-memory-token'] || req.query.token;
+    if (providedToken !== this.authToken) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    next();
+  }
+
   private setupMiddleware(): void {
-    this.app.use(cors());
+    this.app.use(cors({
+      origin: (origin, callback) => {
+        if (!origin || origin.startsWith('http://127.0.0.1') || origin.startsWith('http://localhost')) {
+          callback(null, true);
+        } else if (this.authToken) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    }));
     this.app.use(express.json());
-    this.app.use(express.static('web'));
+    this.app.use(express.static(resolve(__dirname, '..', '..', 'web')));
   }
 
   private setupRoutes(): void {
     this.app.get('/api/health', (req, res) => {
-      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+      res.json({ status: 'ok', timestamp: new Date().toISOString(), authRequired: !!this.authToken });
     });
 
-    this.app.get('/api/stats', (req, res) => {
+    this.app.get('/api/stats', this.authMiddleware.bind(this), (req, res) => {
       const stats = this.db.getStats();
       res.json(stats);
     });
 
-    this.app.get('/api/observations', (req, res) => {
+    this.app.get('/api/observations', this.authMiddleware.bind(this), (req, res) => {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
       const type = req.query.type as string;
@@ -56,7 +85,7 @@ export class WorkerService {
       res.json(observations);
     });
 
-    this.app.get('/api/observations/:id', (req, res) => {
+    this.app.get('/api/observations/:id', this.authMiddleware.bind(this), (req, res) => {
       const id = parseInt(req.params.id);
       const obs = this.db.getObservation(id);
 
@@ -68,7 +97,7 @@ export class WorkerService {
       res.json(obs);
     });
 
-    this.app.post('/api/observations', (req, res) => {
+    this.app.post('/api/observations', this.authMiddleware.bind(this), (req, res) => {
       const id = this.db.storeObservation(req.body);
       const obs = this.db.getObservation(id);
 
@@ -78,17 +107,27 @@ export class WorkerService {
       res.status(201).json(obs);
     });
 
-    this.app.get('/api/search', (req, res) => {
+    this.app.patch('/api/observations/:id', this.authMiddleware.bind(this), (req, res) => {
+      const id = parseInt(req.params.id);
+      const updated = this.db.updateObservation(id, req.body);
+
+      if (!updated) {
+        res.status(404).json({ error: 'Observation not found or no changes provided' });
+        return;
+      }
+
+      const obs = this.db.getObservation(id);
+      this.broadcast({ type: 'observation.updated', data: obs });
+
+      res.json(obs);
+    });
+
+    this.app.get('/api/search', this.authMiddleware.bind(this), (req, res) => {
       const query = req.query.q as string;
       const type = req.query.type as string;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      if (!query) {
-        res.status(400).json({ error: 'Query required' });
-        return;
-      }
-
-      const observations = this.db.searchObservations(query, {
+      const observations = this.db.searchObservations(query || '', {
         type: type as any,
         limit
       });
@@ -96,7 +135,7 @@ export class WorkerService {
       res.json(observations);
     });
 
-    this.app.get('/api/timeline/:id', (req, res) => {
+    this.app.get('/api/timeline/:id', this.authMiddleware.bind(this), (req, res) => {
       const id = parseInt(req.params.id);
       const depth = parseInt(req.query.depth as string) || 5;
 
@@ -104,25 +143,25 @@ export class WorkerService {
       res.json(observations);
     });
 
-    this.app.get('/api/sessions', (req, res) => {
-      res.json([]);
+    this.app.get('/api/sessions', this.authMiddleware.bind(this), (req, res) => {
+      res.json({ message: 'Query sessions via GET /api/observations?sessionId=xxx or use the database directly' });
     });
 
-    this.app.get('/api/projects', (req, res) => {
-      res.json([]);
+    this.app.get('/api/projects', this.authMiddleware.bind(this), (req, res) => {
+      res.json({ message: 'Query projects via GET /api/observations?projectId=xxx or use the database directly' });
     });
 
-    this.app.get('/api/patterns', (req, res) => {
+    this.app.get('/api/patterns', this.authMiddleware.bind(this), (req, res) => {
       const patterns = this.db.getPatterns(50);
       res.json(patterns);
     });
 
-    this.app.get('/api/conflicts', (req, res) => {
+    this.app.get('/api/conflicts', this.authMiddleware.bind(this), (req, res) => {
       const conflicts = this.db.getConflicts();
       res.json(conflicts);
     });
 
-    this.app.post('/api/conflicts/:id/resolve', (req, res) => {
+    this.app.post('/api/conflicts/:id/resolve', this.authMiddleware.bind(this), (req, res) => {
       const id = req.params.id;
       const { resolution } = req.body;
 
@@ -130,7 +169,7 @@ export class WorkerService {
       res.json({ success: true });
     });
 
-    this.app.get('/api/export', (req, res) => {
+    this.app.get('/api/export', this.authMiddleware.bind(this), (req, res) => {
       const format = (req.query.format as string) || 'json';
       const observations = this.db.searchObservations('', { limit: 10000 });
 
@@ -153,7 +192,7 @@ export class WorkerService {
       }
     });
 
-    this.app.post('/api/webhooks', (req, res) => {
+    this.app.post('/api/webhooks', this.authMiddleware.bind(this), (req, res) => {
       const { url, events, secret } = req.body;
       const id = this.db.createWebhook({
         url,
@@ -165,7 +204,7 @@ export class WorkerService {
       res.status(201).json({ id, url, events, active: true });
     });
 
-    this.app.get('/api/webhooks', (req, res) => {
+    this.app.get('/api/webhooks', this.authMiddleware.bind(this), (req, res) => {
       const webhooks = this.db.getWebhooks();
       res.json(webhooks);
     });
@@ -229,8 +268,11 @@ export class WorkerService {
   }
 
   start(): void {
-    this.server.listen(this.config.port, () => {
-      console.log(`Agent-Memory worker running at http://localhost:${this.config.port}`);
+    this.server.listen(this.config.port, '127.0.0.1', () => {
+      console.log(`Agent-Memory worker running at http://127.0.0.1:${this.config.port}`);
+      if (this.authToken) {
+        console.log(`   Auth token required: Set X-Agent-Memory-Token header or ?token query param`);
+      }
     });
   }
 

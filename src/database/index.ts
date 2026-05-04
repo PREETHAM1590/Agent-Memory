@@ -109,13 +109,11 @@ export class MemoryDatabase {
       END;
 
       CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-        INSERT INTO observations_fts(observations_fts, rowid, title, content, summary, tags)
-        VALUES('delete', old.id, old.title, old.content, old.summary, old.tags);
+        DELETE FROM observations_fts WHERE rowid = old.id;
       END;
 
       CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-        INSERT INTO observations_fts(observations_fts, rowid, title, content, summary, tags)
-        VALUES('delete', old.id, old.title, old.content, old.summary, old.tags);
+        DELETE FROM observations_fts WHERE rowid = old.id;
         INSERT INTO observations_fts(rowid, title, content, summary, tags)
         VALUES (new.id, new.title, new.content, new.summary, new.tags);
       END;
@@ -171,12 +169,19 @@ export class MemoryDatabase {
     limit?: number;
     offset?: number;
   } = {}): Observation[] {
-    let sql = `
-      SELECT o.* FROM observations o
-      JOIN observations_fts fts ON o.id = fts.rowid
-      WHERE observations_fts MATCH ?
-    `;
-    const params: any[] = [query];
+    let sql: string;
+    const params: any[] = [];
+
+    if (!query || !query.trim()) {
+      sql = 'SELECT * FROM observations o WHERE 1=1';
+    } else {
+      sql = `
+        SELECT o.* FROM observations o
+        JOIN observations_fts fts ON o.id = fts.rowid
+        WHERE observations_fts MATCH ?
+      `;
+      params.push(query);
+    }
 
     if (options.type) {
       sql += ' AND o.type = ?';
@@ -362,6 +367,65 @@ export class MemoryDatabase {
       secret: row.secret,
       active: row.active === 1
     }));
+  }
+
+  listObservations(limit: number = 20, offset: number = 0): Observation[] {
+    const stmt = this.db.prepare('SELECT * FROM observations ORDER BY created_at DESC LIMIT ? OFFSET ?');
+    const rows = stmt.all(limit, offset) as any[];
+    return rows.map(row => this.rowToObservation(row));
+  }
+
+  deleteObservation(id: number): boolean {
+    const stmt = this.db.prepare('DELETE FROM observations WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  updateObservation(id: number, updates: Partial<Observation>): boolean {
+    const allowedFields: Record<string, string> = {
+      type: 'type',
+      title: 'title',
+      content: 'content',
+      summary: 'summary',
+      tags: 'tags',
+      metadata: 'metadata',
+      projectId: 'project_id',
+      sessionId: 'session_id',
+      gitCommit: 'git_commit',
+      gitBranch: 'git_branch',
+      gitRemote: 'git_remote',
+      filesRead: 'files_read',
+      filesModified: 'files_modified'
+    };
+
+    const sets: string[] = [];
+    const values: any[] = [];
+
+    for (const [key, col] of Object.entries(allowedFields)) {
+      if (key in updates && updates[key as keyof Observation] !== null && updates[key as keyof Observation] !== undefined) {
+        sets.push(`${col} = ?`);
+        let val = updates[key as keyof Observation];
+        if (key === 'tags' || key === 'metadata' || key === 'filesRead' || key === 'filesModified') {
+          val = JSON.stringify(val);
+        }
+        values.push(val);
+      }
+    }
+
+    if (sets.length === 0) return false;
+
+    sets.push("updated_at = strftime('%s', 'now')");
+    values.push(id);
+
+    const stmt = this.db.prepare(`UPDATE observations SET ${sets.join(', ')} WHERE id = ?`);
+    const result = stmt.run(...values);
+    return result.changes > 0;
+  }
+
+  getDatabaseSize(): number {
+    const stmt = this.db.prepare('SELECT page_count * page_size as size FROM pragma_page_count, pragma_page_size');
+    const row = stmt.get() as any;
+    return row?.size || 0;
   }
 
   getStats(): { totalObservations: number; totalSessions: number; totalProjects: number; typeBreakdown: Record<string, number> } {
