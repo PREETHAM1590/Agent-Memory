@@ -454,7 +454,8 @@ try {
     if (detected.length > 0) {
       console.log('\n✅ Detected IDEs:\n');
       for (const r of detected) {
-        console.log(`   ${r.name.padEnd(15)} ${r.path ? `(${r.path.slice(0, 40)})` : ''}`);
+        const pathInfo = r.path ? ` - ${r.path.slice(0, 50)}` : '';
+        console.log(`   ${r.name.padEnd(15)}${pathInfo}`);
       }
     }
 
