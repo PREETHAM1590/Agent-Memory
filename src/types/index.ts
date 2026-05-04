@@ -46,7 +46,11 @@ export type IDEType =
   | 'cline'
   | 'claude'
   | 'gemini'
-  | 'opencode';
+  | 'opencode'
+  | 'antigravity'
+  | 'zed'
+  | 'trae'
+  | 'vscode_copilot';
 
 export interface Project {
   id: string;

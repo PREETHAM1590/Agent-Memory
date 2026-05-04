@@ -44,8 +44,8 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
   kilo: {
     name: 'Kilo Code',
     configDir: '.kilo',
-    configFiles: ['mcp.json'],
-    rulesFile: '.kilo/rules',
+    configFiles: ['kilo.json', 'mcp.json'],
+    rulesFile: 'AGENTS.md',
     detectPaths: [
       '/usr/local/bin/kilo',
       'C:\\Program Files\\Kilo',
@@ -56,7 +56,7 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
   aider: {
     name: 'Aider',
     configDir: '.aider',
-    configFiles: ['conf.yml'],
+    configFiles: ['.aider.conf.yml'],
     rulesFile: 'AIDER_RULES.md',
     detectPaths: [],
     binaryNames: ['aider']
@@ -65,7 +65,7 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
     name: 'Continue.dev',
     configDir: '.continue',
     configFiles: ['config.json'],
-    rulesFile: '.continue/rules',
+    rulesFile: '.continuerc.json',
     detectPaths: [
       '/Applications/Continue.app',
       'C:\\Users\\%USER%\\.continue'
@@ -75,7 +75,7 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
   cline: {
     name: 'Cline',
     configDir: '.cline',
-    configFiles: ['mcp.json'],
+    configFiles: ['cline_mcp_settings.json', 'mcp.json'],
     rulesFile: '.clinerules',
     detectPaths: [],
     binaryNames: ['cline']
@@ -83,7 +83,7 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
   claude: {
     name: 'Claude Code',
     configDir: '.claude',
-    configFiles: ['settings.json', 'mcp.json'],
+    configFiles: ['.mcp.json', 'settings.json'],
     rulesFile: 'CLAUDE.md',
     detectPaths: [
       '/usr/local/bin/claude',
@@ -105,12 +105,62 @@ const IDE_CONFIGS: Record<IDEType, IDEInstallConfig> = {
   opencode: {
     name: 'OpenCode',
     configDir: '.opencode',
-    configFiles: ['mcp.json'],
+    configFiles: ['.opencode.json', 'mcp.json'],
     rulesFile: 'OPENCODE.md',
     detectPaths: [
-      '/usr/local/bin/opencode'
+      '/usr/local/bin/opencode',
+      'C:\\Users\\%USER%\\.opencode'
     ],
     binaryNames: ['opencode']
+  },
+  antigravity: {
+    name: 'Antigravity',
+    configDir: '.antigravity',
+    configFiles: ['mcp.json', 'settings.json'],
+    rulesFile: 'ANTIGRAVITY.md',
+    detectPaths: [
+      '/Applications/Antigravity.app',
+      'C:\\Program Files\\Antigravity',
+      'C:\\Users\\%USER%\\AppData\\Local\\Programs\\Antigravity',
+      'C:\\Users\\%USER%\\.antigravity',
+      '~/.antigravity'
+    ],
+    binaryNames: ['antigravity', 'ag']
+  },
+  zed: {
+    name: 'Zed',
+    configDir: '.config/zed',
+    configFiles: ['settings.json'],
+    rulesFile: '.zed/rules.md',
+    detectPaths: [
+      '/Applications/Zed.app',
+      '/usr/bin/zed',
+      'C:\\Program Files\\Zed'
+    ],
+    binaryNames: ['zed', 'Zed']
+  },
+  trae: {
+    name: 'Trae',
+    configDir: '.trae',
+    configFiles: ['mcp.json', 'settings.json'],
+    rulesFile: 'TRAE.md',
+    detectPaths: [
+      '/Applications/Trae.app',
+      'C:\\Users\\%USER%\\.trae'
+    ],
+    binaryNames: ['trae']
+  },
+  vscode_copilot: {
+    name: 'VS Code + Copilot',
+    configDir: '.vscode',
+    configFiles: ['mcp.json', 'settings.json'],
+    rulesFile: '.vscode/rules.md',
+    detectPaths: [
+      '/Applications/Visual Studio Code.app',
+      'C:\\Program Files\\Microsoft VS Code',
+      '/usr/bin/code'
+    ],
+    binaryNames: ['code', 'Code']
   }
 };
 
@@ -152,24 +202,24 @@ export class AutoInstaller {
   }
 
   private detectWindows(config: IDEInstallConfig): { installed: boolean; path?: string } {
-    const possiblePaths = [
+    const programDirs = [
       `C:\\Program Files\\${config.name}`,
       `C:\\Program Files (x86)\\${config.name}`,
       join(this.homeDir, 'AppData', 'Local', 'Programs', config.name.toLowerCase()),
       join(this.homeDir, 'AppData', 'Roaming', config.name.toLowerCase())
     ];
 
-    for (const p of possiblePaths) {
-      if (existsSync(p)) {
-        return { installed: true, path: p };
+    for (const dir of programDirs) {
+      if (existsSync(dir)) {
+        return { installed: true, path: dir };
       }
     }
 
     for (const binary of config.binaryNames) {
       try {
-        const result = execSync(`where ${binary}`, { encoding: 'utf-8' }).trim();
-        if (result) {
-          return { installed: true, path: result.split('\n')[0] };
+        const result = execSync(`where ${binary}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+        if (result && result.trim()) {
+          return { installed: true, path: result.trim().split('\n')[0] };
         }
       } catch {}
     }
@@ -194,9 +244,9 @@ export class AutoInstaller {
 
     for (const binary of config.binaryNames) {
       try {
-        const result = execSync(`which ${binary}`, { encoding: 'utf-8' }).trim();
-        if (result) {
-          return { installed: true, path: result };
+        const result = execSync(`which ${binary}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+        if (result && result.trim()) {
+          return { installed: true, path: result.trim() };
         }
       } catch {}
     }
@@ -211,9 +261,9 @@ export class AutoInstaller {
   private detectLinux(config: IDEInstallConfig): { installed: boolean; path?: string } {
     for (const binary of config.binaryNames) {
       try {
-        const result = execSync(`which ${binary}`, { encoding: 'utf-8' }).trim();
-        if (result) {
-          return { installed: true, path: result };
+        const result = execSync(`which ${binary}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+        if (result && result.trim()) {
+          return { installed: true, path: result.trim() };
         }
       } catch {}
     }
@@ -239,7 +289,11 @@ export class AutoInstaller {
 
     const toInstall = detectedOnly 
       ? detected.filter(d => d.installed)
-      : detected;
+      : Object.keys(IDE_CONFIGS).map(ide => ({
+          ide: ide as IDEType,
+          name: IDE_CONFIGS[ide as IDEType].name,
+          installed: true
+        }));
 
     if (toInstall.length === 0) {
       console.log('No IDEs detected. Use --force to install for all supported IDEs.');
@@ -248,7 +302,7 @@ export class AutoInstaller {
 
     console.log(`\n🚀 Installing Agent-Memory for ${toInstall.length} IDE(s)...\n`);
 
-    for (const { ide, name, installed } of toInstall) {
+    for (const { ide, name } of toInstall) {
       console.log(`  📦 ${name}...`);
       try {
         await this.installForIDE(ide);
@@ -263,7 +317,7 @@ export class AutoInstaller {
     console.log(`\n✨ Installation complete! ${results.filter(r => r.success).length}/${results.length} succeeded.\n`);
     console.log('Next steps:');
     console.log('  1. Restart your IDE(s)');
-    console.log('  2. Run: npx agent-memory start');
+    console.log('  2. Run: npx @preetham1590/agent-memory-ai start');
     console.log('  3. Open: http://localhost:37800\n');
 
     return results;
@@ -274,7 +328,7 @@ export class AutoInstaller {
       mkdirSync(this.agentMemoryDir, { recursive: true });
     }
 
-    const subdirs = ['data', 'logs', 'plugins', 'templates', 'hooks', 'dist'];
+    const subdirs = ['data', 'logs', 'plugins', 'templates', 'hooks', 'brain', 'brain/sessions'];
     for (const dir of subdirs) {
       const path = join(this.agentMemoryDir, dir);
       if (!existsSync(path)) {
@@ -316,7 +370,7 @@ export class AutoInstaller {
       mcpServers: {
         'agent-memory': {
           command: 'npx',
-          args: ['-y', 'agent-memory', 'mcp'],
+          args: ['-y', '@preetham1590/agent-memory-ai', 'mcp'],
           env: {
             AGENT_MEMORY_DB: join(this.agentMemoryDir, 'data', 'memory.db')
           }
@@ -336,69 +390,63 @@ export class AutoInstaller {
         }
       }
 
-      if (configFile === 'mcp.json' || configFile === 'settings.json') {
-        if (!existing.mcpServers) {
-          existing.mcpServers = {};
-        }
-        existing.mcpServers['agent-memory'] = mcpConfig.mcpServers['agent-memory'];
+      if (!existing.mcpServers) {
+        existing.mcpServers = {};
       }
+      existing.mcpServers['agent-memory'] = mcpConfig.mcpServers['agent-memory'];
 
       writeFileSync(configPath, JSON.stringify(existing, null, 2));
     }
   }
 
   private async installRules(ide: IDEType, config: IDEInstallConfig): Promise<void> {
-    const rules = this.generateRulesContent(ide);
-    const rulesPath = join(process.cwd(), config.rulesFile);
-    writeFileSync(rulesPath, rules);
-  }
-
-  private generateRulesContent(ide: IDEType): string {
-    return `# Agent-Memory Integration
+    const rules = `# Agent-Memory Integration
 
 This project uses Agent-Memory for persistent context across sessions.
 
 ## Quick Commands
 
-- Start worker: \`npx agent-memory start\`
-- Search memory: \`npx agent-memory search "query"\`
-- View dashboard: \`npx agent-memory web\`
+- Start worker: \`npx @preetham1590/agent-memory-ai start\`
+- Search memory: \`npx @preetham1590/agent-memory-ai search "query"\`
+- View dashboard: \`npx @preetham1590/agent-memory-ai web\`
 
 ## MCP Tools
 
 | Tool | Description |
 |------|-------------|
+| memory_init | Initialize session with full context |
 | memory_search | Search memory with filters |
 | memory_timeline | Get chronological context |
 | memory_get_observations | Fetch full details |
 | memory_store | Store new observation |
+| memory_log | Log session activities |
+| memory_context | Get brain context |
+| memory_sync | Sync to all IDEs |
 | memory_analytics | Get statistics |
 
 ## Usage
 
-Always search memory before complex tasks:
+Always initialize at session start:
 
 \`\`\`
-memory_search(query="previous database decisions")
+memory_init(projectPath="/path/to/project")
 \`\`\`
 
-Store important decisions:
+Log important activities:
 
 \`\`\`
-memory_store(type="decision", title="Use PostgreSQL", content="...")
+memory_log(type="decision", content="Use PostgreSQL for main DB")
 \`\`\`
 
-## Memory Types
+End session properly:
 
-| Type | Use For |
-|------|---------|
-| bugfix | Bug fixes |
-| feature | New features |
-| decision | Architecture decisions |
-| discovery | Learnings |
-| change | Code changes |
-| pattern | Reusable patterns |
+\`\`\`
+memory_end_session(summary="Implemented X, fixed Y")
+\`\`\`
 `;
+
+    const rulesPath = join(process.cwd(), config.rulesFile);
+    writeFileSync(rulesPath, rules);
   }
 
   private installHooks(ide: IDEType): void {
@@ -408,8 +456,9 @@ memory_store(type="decision", title="Use PostgreSQL", content="...")
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-const dbPath = process.env.AGENT_MEMORY_DB || path.join(require('os').homedir(), '.agent-memory', 'data', 'memory.db');
+const dbPath = process.env.AGENT_MEMORY_DB || path.join(os.homedir(), '.agent-memory', 'data', 'memory.db');
 
 try {
   const { Database } = require('better-sqlite3');
@@ -433,7 +482,6 @@ try {
 `;
 
     writeFileSync(join(hooksDir, 'session-start.js'), sessionStartHook);
-    writeFileSync(join(hooksDir, 'session-start'), sessionStartHook);
   }
 
   getPlatformInfo(): { platform: string; home: string; supported: string[] } {
@@ -455,7 +503,7 @@ try {
       console.log('\n✅ Detected IDEs:\n');
       for (const r of detected) {
         const pathInfo = r.path ? ` - ${r.path.slice(0, 50)}` : '';
-        console.log(`   ${r.name.padEnd(15)}${pathInfo}`);
+        console.log(`   ${r.name.padEnd(18)}${pathInfo}`);
       }
     }
 
