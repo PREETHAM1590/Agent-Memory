@@ -18,7 +18,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js start",
     "start:worker": "node dist/worker/index.js",
-    "install": "node dist/cli.js install",
+    "postinstall": "echo 'Agent-Memory installed. Run: npx agent-memory install'",
     "detect": "node dist/cli.js detect",
     "mcp": "node dist/cli.js mcp",
     "test": "vitest",

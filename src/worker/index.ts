@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
-import { MemoryDatabase } from './database/index.js';
-import { Observation, Config, WebhookEvent } from './types/index.js';
+import { MemoryDatabase } from '../database/index.js';
+import { Observation, Config, WebhookEvent } from '../types/index.js';
 
 export class WorkerService {
   private app: express.Application;
@@ -195,7 +195,7 @@ export class WorkerService {
 
   private async triggerWebhooks(event: WebhookEvent, data: any): Promise<void> {
     const webhooks = this.db.getWebhooks();
-    const matching = webhooks.filter(w => w.events.includes(event));
+    const matching = webhooks.filter((w: any) => w.events.includes(event));
 
     for (const webhook of matching) {
       try {

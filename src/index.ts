@@ -1,11 +1,13 @@
 export { MemoryDatabase } from './database/index.js';
 export { MCPServer } from './mcp/server.js';
 export { WorkerService } from './worker/index.js';
-export { IDEInstaller } from './installer/index.js';
+export { AutoInstaller } from './installer/index.js';
 export { Summarizer } from './summarizer/index.js';
 export { PatternExtractor } from './learning/patterns.js';
 export { GitIntegration } from './git/index.js';
 export { CloudSync, TeamSharing } from './cloud/index.js';
+export { AgentBrainSystem } from './brain/index.js';
+export { SessionInitializer } from './brain/initializer.js';
 
 export * from './types/index.js';
 

@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, homedir, platform } from 'path';
+import { join } from 'path';
+import { homedir, platform } from 'os';
 import { IDEType } from '../types/index.js';
 
 interface IDEInstallConfig {

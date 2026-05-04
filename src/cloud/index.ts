@@ -85,7 +85,7 @@ export class CloudSync {
       throw new Error(`Failed to fetch remote changes: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.observations || [];
   }
 
@@ -137,7 +137,7 @@ export class CloudSync {
       throw new Error(`Backup failed: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.backupId;
   }
 
@@ -152,7 +152,7 @@ export class CloudSync {
       throw new Error(`Restore failed: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     let restored = 0;
 
     for (const obs of data.observations) {
@@ -217,7 +217,7 @@ export class TeamSharing {
     if (!this.endpoint) return [];
 
     const response = await fetch(`${this.endpoint}/teams/${teamId}/observations`);
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.observations || [];
   }
 }

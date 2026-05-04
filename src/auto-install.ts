@@ -1,6 +1,7 @@
 import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join, homedir, platform } from 'path';
+import { join } from 'path';
+import { homedir, platform } from 'os';
 
 const CONFIG_DIR = join(homedir(), '.agent-memory');
 const DATA_DIR = join(CONFIG_DIR, 'data');
