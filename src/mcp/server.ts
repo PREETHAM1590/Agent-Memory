@@ -7,14 +7,24 @@ import {
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryDatabase } from '../database/index.js';
-import { SearchOptions, ObservationType } from '../types/index.js';
+import { SessionInitializer } from '../brain/initializer.js';
+import { AgentBrainSystem } from '../brain/index.js';
+import { ObservationType } from '../types/index.js';
+import { homedir } from 'os';
+import { join } from 'path';
 
 export class MCPServer {
   private server: Server;
   private db: MemoryDatabase;
+  private brain: AgentBrainSystem;
+  private initializer: SessionInitializer;
+  private sessionStarted: boolean = false;
 
   constructor(db: MemoryDatabase) {
     this.db = db;
+    const brainDir = join(homedir(), '.agent-memory', 'brain');
+    this.brain = new AgentBrainSystem(db, brainDir);
+    this.initializer = new SessionInitializer();
     this.server = new Server(
       { name: 'agent-memory', version: '1.0.0' },
       { capabilities: { tools: {} } }
@@ -26,6 +36,17 @@ export class MCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
+          name: 'memory_init',
+          description: 'Initialize session context. Call this at the START of EVERY session to get full context including identity, memory, technical state, and recent activities. This ensures continuity across all IDEs.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Current project path' },
+              projectName: { type: 'string', description: 'Current project name' }
+            }
+          }
+        },
+        {
           name: 'memory_search',
           description: 'Search memory index with filters. Returns compact results with IDs (~50-100 tokens/result)',
           inputSchema: {
@@ -35,8 +56,6 @@ export class MCPServer {
               type: { type: 'string', enum: ['bugfix', 'feature', 'decision', 'discovery', 'change', 'pattern', 'question', 'note'] },
               projectId: { type: 'string' },
               tags: { type: 'array', items: { type: 'string' } },
-              dateStart: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
-              dateEnd: { type: 'string', description: 'End date (YYYY-MM-DD)' },
               limit: { type: 'number', default: 20 }
             },
             required: ['query']
@@ -50,13 +69,13 @@ export class MCPServer {
             properties: {
               observationId: { type: 'number' },
               query: { type: 'string', description: 'Query to find anchor if ID not provided' },
-              depth: { type: 'number', default: 5, description: 'Items before and after anchor' }
+              depth: { type: 'number', default: 5 }
             }
           }
         },
         {
           name: 'memory_get_observations',
-          description: 'Fetch full observation details by IDs. ALWAYS batch multiple IDs. ~500-1000 tokens per observation',
+          description: 'Fetch full observation details by IDs. ALWAYS batch multiple IDs.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -76,11 +95,40 @@ export class MCPServer {
               content: { type: 'string' },
               tags: { type: 'array', items: { type: 'string' } },
               filesRead: { type: 'array', items: { type: 'string' } },
-              filesModified: { type: 'array', items: { type: 'string' } },
-              gitCommit: { type: 'string' },
-              gitBranch: { type: 'string' }
+              filesModified: { type: 'array', items: { type: 'string' } }
             },
             required: ['type', 'title', 'content']
+          }
+        },
+        {
+          name: 'memory_log',
+          description: 'Log an activity to the current session (decision, task, file change, etc.)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['observation', 'decision', 'task', 'file_change', 'note'] },
+              content: { type: 'string', description: 'Activity description' },
+              details: { type: 'string', description: 'Additional details' }
+            },
+            required: ['type', 'content']
+          }
+        },
+        {
+          name: 'memory_context',
+          description: 'Get the full agent brain context (identity, memory, technical state, etc.)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              section: { type: 'string', enum: ['all', 'identity', 'memory', 'technical', 'issues', 'recent'], default: 'all' }
+            }
+          }
+        },
+        {
+          name: 'memory_sync',
+          description: 'Sync context to all installed IDEs for cross-IDE continuity',
+          inputSchema: {
+            type: 'object',
+            properties: {}
           }
         },
         {
@@ -92,6 +140,17 @@ export class MCPServer {
               period: { type: 'string', enum: ['1h', '24h', '7d', '30d', 'all'], default: '7d' }
             }
           }
+        },
+        {
+          name: 'memory_end_session',
+          description: 'End the current session and generate summary. Call this when session is complete.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              summary: { type: 'string', description: 'Session summary' }
+            },
+            required: ['summary']
+          }
         }
       ]
     }));
@@ -101,6 +160,8 @@ export class MCPServer {
 
       try {
         switch (name) {
+          case 'memory_init':
+            return await this.handleInit(args as any);
           case 'memory_search':
             return await this.handleSearch(args as any);
           case 'memory_timeline':
@@ -109,8 +170,16 @@ export class MCPServer {
             return await this.handleGetObservations(args as any);
           case 'memory_store':
             return await this.handleStore(args as any);
+          case 'memory_log':
+            return await this.handleLog(args as any);
+          case 'memory_context':
+            return await this.handleContext(args as any);
+          case 'memory_sync':
+            return await this.handleSync();
           case 'memory_analytics':
-            return await this.handleAnalytics(args as any);
+            return await this.handleAnalytics();
+          case 'memory_end_session':
+            return await this.handleEndSession(args as any);
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
@@ -120,13 +189,61 @@ export class MCPServer {
     });
   }
 
+  private async handleInit(args: {
+    projectPath?: string;
+    projectName?: string;
+  }): Promise<{ content: Array<{ type: string; text: string }> }> {
+    const context = await this.initializer.initialize({
+      projectPath: args.projectPath,
+      projectName: args.projectName
+    });
+
+    this.brain.startSession(args.projectName);
+    this.sessionStarted = true;
+
+    const output = `🧠 AGENT-MEMORY INITIALIZED
+
+═══════════════════════════════════════════════════════════
+
+## Session Information
+- **IDE**: ${context.ide}
+- **Project**: ${context.project?.name || 'None'}
+- **Initialized**: ${context.timestamp}
+
+## Quick Context
+${context.quickContext}
+
+## Recent Sessions
+${context.recentSessions.length > 0 
+  ? context.recentSessions.map(s => `- ${s}`).join('\n')
+  : 'No recent sessions'}
+
+## Technical State
+- Platform: ${process.platform}
+- Node: ${process.version}
+
+═══════════════════════════════════════════════════════════
+
+💡 Available Commands:
+- memory_search: Search past observations
+- memory_store: Save new observations  
+- memory_log: Log session activities
+- memory_context: Get full brain context
+- memory_sync: Sync to all IDEs
+- memory_end_session: End and summarize session
+
+Ready for your instructions!`;
+
+    return {
+      content: [{ type: 'text', text: output }]
+    };
+  }
+
   private async handleSearch(args: {
     query: string;
     type?: ObservationType;
     projectId?: string;
     tags?: string[];
-    dateStart?: string;
-    dateEnd?: string;
     limit?: number;
   }): Promise<{ content: Array<{ type: string; text: string }> }> {
     const observations = this.db.searchObservations(args.query, {
@@ -199,7 +316,7 @@ Date: ${obs.createdAt.toISOString()}
 Tags: ${obs.tags.join(', ') || 'none'}
 ${obs.summary ? `Summary: ${obs.summary}\n` : ''}Content:
 ${obs.content}
-${obs.filesRead.length > 0 ? `Files Read: ${obs.filesRead.join(', ')}\n` : ''}${obs.filesModified.length > 0 ? `Files Modified: ${obs.filesModified.join(', ')}\n` : ''}${obs.gitCommit ? `Git: ${obs.gitCommit} (${obs.gitBranch})\n` : ''}`;
+${obs.filesRead.length > 0 ? `Files Read: ${obs.filesRead.join(', ')}\n` : ''}${obs.filesModified.length > 0 ? `Files Modified: ${obs.filesModified.join(', ')}\n` : ''}`;
     });
 
     return {
@@ -214,8 +331,6 @@ ${obs.filesRead.length > 0 ? `Files Read: ${obs.filesRead.join(', ')}\n` : ''}${
     tags?: string[];
     filesRead?: string[];
     filesModified?: string[];
-    gitCommit?: string;
-    gitBranch?: string;
   }): Promise<{ content: Array<{ type: string; text: string }> }> {
     const id = this.db.storeObservation({
       type: args.type,
@@ -224,32 +339,108 @@ ${obs.filesRead.length > 0 ? `Files Read: ${obs.filesRead.join(', ')}\n` : ''}${
       tags: args.tags || [],
       metadata: {},
       filesRead: args.filesRead || [],
-      filesModified: args.filesModified || [],
-      gitCommit: args.gitCommit,
-      gitBranch: args.gitBranch
+      filesModified: args.filesModified || []
+    });
+
+    this.brain.logActivity({
+      type: 'observation',
+      content: args.title,
+      details: String(id)
     });
 
     return {
-      content: [{ type: 'text', text: `Stored observation #${id}: ${args.title}` }]
+      content: [{ type: 'text', text: `✅ Stored observation #${id}: ${args.title}` }]
     };
   }
 
-  private async handleAnalytics(args: {
-    period?: string;
+  private async handleLog(args: {
+    type: 'observation' | 'decision' | 'task' | 'file_change' | 'note';
+    content: string;
+    details?: string;
   }): Promise<{ content: Array<{ type: string; text: string }> }> {
+    this.brain.logActivity(args);
+
+    return {
+      content: [{ type: 'text', text: `📝 Logged ${args.type}: ${args.content}` }]
+    };
+  }
+
+  private async handleContext(args: {
+    section?: string;
+  }): Promise<{ content: Array<{ type: string; text: string }> }> {
+    const section = args.section || 'all';
+    const fullContext = this.brain.getFullContext();
+
+    if (section === 'all') {
+      return {
+        content: [{ type: 'text', text: fullContext.slice(0, 8000) }]
+      };
+    }
+
+    const sections: Record<string, string> = {
+      identity: '## IDENTITY',
+      memory: '## MEMORY',
+      technical: '## TECHNICAL STATE',
+      issues: '## KNOWN ISSUES',
+      recent: '## RECENT'
+    };
+
+    const marker = sections[section];
+    if (marker && fullContext.includes(marker)) {
+      const start = fullContext.indexOf(marker);
+      const end = Object.values(sections)
+        .filter(s => s !== marker && fullContext.indexOf(s) > start)
+        .map(s => fullContext.indexOf(s))
+        .sort((a, b) => a - b)[0] || fullContext.length;
+
+      return {
+        content: [{ type: 'text', text: fullContext.slice(start, end) }]
+      };
+    }
+
+    return {
+      content: [{ type: 'text', text: fullContext.slice(0, 5000) }]
+    };
+  }
+
+  private async handleSync(): Promise<{ content: Array<{ type: string; text: string }> }> {
+    const results = this.brain.syncAcrossIDEs();
+
+    const output = `🔄 Synced to IDEs:\n\n` + 
+      results.map(r => `${r.synced ? '✅' : '❌'} ${r.ide}`).join('\n');
+
+    return {
+      content: [{ type: 'text', text: output }]
+    };
+  }
+
+  private async handleAnalytics(): Promise<{ content: Array<{ type: string; text: string }> }> {
     const stats = this.db.getStats();
 
-    const output = `Memory Analytics
+    const output = `📊 Memory Analytics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Total Observations: ${stats.totalObservations}
 Total Sessions: ${stats.totalSessions}
 Total Projects: ${stats.totalProjects}
 
 Observation Types:
-${Object.entries(stats.typeBreakdown).map(([type, count]) => `  ${this.getTypeIcon(type as ObservationType)} ${type}: ${count}`).join('\n')}`;
+${Object.entries(stats.typeBreakdown).map(([type, count]) => 
+  `  ${this.getTypeIcon(type as ObservationType)} ${type}: ${count}`
+).join('\n')}`;
 
     return {
       content: [{ type: 'text', text: output }]
+    };
+  }
+
+  private async handleEndSession(args: {
+    summary: string;
+  }): Promise<{ content: Array<{ type: string; text: string }> }> {
+    this.brain.endSession(args.summary);
+    this.sessionStarted = false;
+
+    return {
+      content: [{ type: 'text', text: `✅ Session ended and logged.\n\nSummary: ${args.summary}` }]
     };
   }
 

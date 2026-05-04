@@ -5,6 +5,8 @@ import { AutoInstaller } from './installer/auto-installer.js';
 import { WorkerService } from './worker/index.js';
 import { MemoryDatabase } from './database/index.js';
 import { MCPServer } from './mcp/server.js';
+import { SessionInitializer } from './brain/initializer.js';
+import { AgentBrainSystem } from './brain/index.js';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -261,6 +263,94 @@ program
 
     console.log('─'.repeat(50));
     console.log('\n💡 Run "npx agent-memory detect" to see which IDEs are installed\n');
+  });
+
+program
+  .command('init')
+  .description('Initialize session context - Call this at the start of every session')
+  .option('-p, --project <path>', 'Project path')
+  .option('-n, --name <name>', 'Project name')
+  .action(async (options) => {
+    const initializer = new SessionInitializer();
+    
+    console.log('\n🧠 Initializing Agent-Memory Session...\n');
+    
+    const context = await initializer.initialize({
+      projectPath: options.project,
+      projectName: options.name
+    });
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('\n📅 Session Initialized');
+    console.log(`   IDE: ${context.ide}`);
+    console.log(`   Time: ${context.timestamp}`);
+    if (context.project) {
+      console.log(`\n📁 Project: ${context.project.name}`);
+      console.log(`   Path: ${context.project.path}`);
+      console.log(`   Tech: ${context.project.technologies.join(', ')}`);
+    }
+    console.log('\n═══════════════════════════════════════════════════════════');
+    console.log('\n💡 Your agent now has full context of:');
+    console.log('   • All past sessions and decisions');
+    console.log('   • Technical state and known issues');
+    console.log('   • Project structure and dependencies');
+    console.log('   • Your preferences and patterns');
+    console.log('\n   Synced to all installed IDEs for seamless switching.\n');
+  });
+
+program
+  .command('context')
+  .description('Show current agent brain context')
+  .option('-s, --section <section>', 'Section to show (all, identity, memory, technical)')
+  .action(async (options) => {
+    const config = getConfig();
+    const db = new MemoryDatabase(config.database);
+    const brainDir = join(homedir(), '.agent-memory', 'brain');
+    const brain = new AgentBrainSystem(db, brainDir);
+
+    const section = options.section || 'all';
+    const context = brain.getFullContext();
+
+    console.log('\n' + context.slice(0, 5000) + '\n');
+  });
+
+program
+  .command('log <type> <content>')
+  .description('Log an activity to the current session')
+  .option('-d, --details <details>', 'Additional details')
+  .action(async (type, content, options) => {
+    const config = getConfig();
+    const db = new MemoryDatabase(config.database);
+    const brainDir = join(homedir(), '.agent-memory', 'brain');
+    const brain = new AgentBrainSystem(db, brainDir);
+
+    brain.logActivity({
+      type: type as any,
+      content,
+      details: options.details
+    });
+
+    console.log(`\n📝 Logged ${type}: ${content}\n`);
+  });
+
+program
+  .command('sync')
+  .description('Sync context to all installed IDEs')
+  .action(async () => {
+    const config = getConfig();
+    const db = new MemoryDatabase(config.database);
+    const brainDir = join(homedir(), '.agent-memory', 'brain');
+    const brain = new AgentBrainSystem(db, brainDir);
+
+    console.log('\n🔄 Syncing context to all IDEs...\n');
+    
+    const results = brain.syncAcrossIDEs();
+    
+    for (const r of results) {
+      console.log(`  ${r.synced ? '✅' : '❌'} ${r.ide}`);
+    }
+    
+    console.log('\n');
   });
 
 program.parse();
