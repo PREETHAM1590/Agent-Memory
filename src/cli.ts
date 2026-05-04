@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { IDEInstaller } from './installer/index.js';
+import { AutoInstaller } from './installer/auto-installer.js';
 import { WorkerService } from './worker/index.js';
 import { MemoryDatabase } from './database/index.js';
 import { MCPServer } from './mcp/server.js';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import open from 'open';
 
 const program = new Command();
 
@@ -30,25 +29,53 @@ function getConfig() {
 
 program
   .name('agent-memory')
-  .description('Universal AI IDE Memory System')
+  .description('Universal AI IDE Memory System - Auto-detect and install for all your IDEs')
   .version('1.0.0');
 
 program
   .command('install')
-  .description('Install Agent-Memory for an IDE')
-  .option('-i, --ide <ide>', 'IDE to install for (cursor, windsurf, kilo, aider, continue, cline, claude, gemini)')
+  .description('Auto-detect ALL installed IDEs and install Agent-Memory for them')
+  .option('-a, --all', 'Install for ALL supported IDEs (even if not detected)', false)
+  .option('-i, --ide <ide>', 'Install for specific IDE only')
+  .option('-d, --detect', 'Only detect IDEs, do not install', false)
+  .option('-v, --verbose', 'Show detailed output', false)
   .action(async (options) => {
-    const installer = new IDEInstaller();
-    const ide = options.ide || installer.detectIDE();
+    const installer = new AutoInstaller();
 
-    if (!ide) {
-      console.log('Could not detect IDE. Please specify with --ide');
-      console.log('Supported IDEs:');
-      installer.listSupportedIDEs().forEach(i => console.log(`  - ${i.id}: ${i.name}`));
+    if (options.detect) {
+      const detected = installer.detectAllIDEs();
+      installer.printDetectionResults(detected);
       return;
     }
 
-    await installer.install(ide);
+    if (options.ide) {
+      console.log(`\n📦 Installing for ${options.ide}...\n`);
+      await installer.installAll(false);
+      return;
+    }
+
+    console.log('\n🔍 Detecting installed IDEs...\n');
+    const detected = installer.detectAllIDEs();
+    installer.printDetectionResults(detected);
+
+    if (options.all) {
+      console.log('\n📦 Installing for ALL supported IDEs...\n');
+      await installer.installAll(false);
+    } else {
+      await installer.installAll(true);
+    }
+  });
+
+program
+  .command('detect')
+  .description('Detect all installed IDEs on this system')
+  .action(async () => {
+    const installer = new AutoInstaller();
+    const detected = installer.detectAllIDEs();
+    installer.printDetectionResults(detected);
+
+    console.log('\n💡 To install, run: npx agent-memory install');
+    console.log('💡 To install for ALL IDEs, run: npx agent-memory install --all\n');
   });
 
 program
@@ -62,8 +89,11 @@ program
     const db = new MemoryDatabase(config.database);
     const worker = new WorkerService(db, config);
 
+    console.log(`\n🚀 Agent-Memory Worker started`);
+    console.log(`   Dashboard: http://localhost:${config.port}`);
+    console.log(`   Database: ${config.database}\n`);
+
     worker.start();
-    console.log(`Worker started on port ${config.port}`);
   });
 
 program
@@ -78,11 +108,13 @@ program
 
 program
   .command('web')
-  .description('Open the web viewer')
+  .description('Open the web viewer in browser')
   .action(async () => {
     const config = getConfig();
     const url = `http://localhost:${config.port}`;
-    console.log(`Opening ${url}`);
+    console.log(`\n🌐 Opening ${url}\n`);
+    
+    const { default: open } = await import('open');
     await open(url);
   });
 
@@ -101,21 +133,41 @@ program
     });
 
     if (results.length === 0) {
-      console.log('No results found');
+      console.log('\n⚠️  No results found\n');
       return;
     }
 
-    console.log(`Found ${results.length} observations:\n`);
+    console.log(`\n📚 Found ${results.length} observations:\n`);
     for (const obs of results) {
       const icons: Record<string, string> = {
         bugfix: '🔴', feature: '🟢', decision: '🟣', discovery: '🔵', change: '🟡'
       };
       const icon = icons[obs.type] || '⚪';
-      console.log(`${icon} #${obs.id} | ${obs.title}`);
-      console.log(`   ${obs.content.slice(0, 100)}...`);
-      console.log(`   Tags: ${obs.tags.join(', ')}`);
+      console.log(`  ${icon} #${obs.id} | ${obs.title}`);
+      console.log(`     ${obs.content.slice(0, 80)}...`);
       console.log('');
     }
+  });
+
+program
+  .command('store <type> <title> [content]')
+  .description('Store a new observation')
+  .option('-t, --tags <tags>', 'Comma-separated tags')
+  .action(async (type, title, content, options) => {
+    const config = getConfig();
+    const db = new MemoryDatabase(config.database);
+
+    const id = db.storeObservation({
+      type: type as any,
+      title,
+      content: content || '',
+      tags: options.tags?.split(',') || [],
+      metadata: {},
+      filesRead: [],
+      filesModified: []
+    });
+
+    console.log(`\n✅ Stored observation #${id}: ${title}\n`);
   });
 
 program
@@ -126,12 +178,13 @@ program
     const db = new MemoryDatabase(config.database);
     const stats = db.getStats();
 
-    console.log('\nMemory Statistics');
-    console.log('================\n');
-    console.log(`Total Observations: ${stats.totalObservations}`);
-    console.log(`Total Sessions: ${stats.totalSessions}`);
-    console.log(`Total Projects: ${stats.totalProjects}`);
-    console.log('\nObservation Types:');
+    console.log('\n📊 Memory Statistics\n');
+    console.log('─'.repeat(30));
+    console.log(`  Observations: ${stats.totalObservations}`);
+    console.log(`  Sessions:     ${stats.totalSessions}`);
+    console.log(`  Projects:     ${stats.totalProjects}`);
+    console.log('─'.repeat(30));
+    console.log('\n📈 Observation Types:\n');
 
     const icons: Record<string, string> = {
       bugfix: '🔴', feature: '🟢', decision: '🟣', discovery: '🔵', change: '🟡', pattern: '🟠', note: '📝'
@@ -139,8 +192,9 @@ program
 
     for (const [type, count] of Object.entries(stats.typeBreakdown)) {
       const icon = icons[type] || '⚪';
-      console.log(`  ${icon} ${type}: ${count}`);
+      console.log(`  ${icon} ${type.padEnd(12)} ${count}`);
     }
+    console.log('');
   });
 
 program
@@ -156,19 +210,22 @@ program
 
     switch (format) {
       case 'csv':
-        output = observations.map(o => `${o.id},${o.type},"${o.title}","${o.content.slice(0, 100)}"`).join('\n');
+        output = 'id,type,title,content,tags,date\n' + 
+          observations.map(o => 
+            `${o.id},${o.type},"${o.title.replace(/"/g, '""')}","${o.content.slice(0, 100).replace(/"/g, '""')}","${o.tags.join(';')}",${o.createdAt.toISOString()}`
+          ).join('\n');
         break;
       case 'markdown':
-        output = observations.map(o => `## #${o.id} - ${o.title}\n\n${o.content}\n`).join('\n---\n');
+        output = '# Agent-Memory Export\n\n' + 
+          observations.map(o => `## #${o.id} - ${o.title}\n\n**Type:** ${o.type}\n**Date:** ${o.createdAt.toISOString()}\n\n${o.content}\n`).join('\n---\n');
         break;
       default:
         output = JSON.stringify(observations, null, 2);
     }
 
     if (options.output) {
-      const { writeFileSync } = await import('fs');
       writeFileSync(options.output, output);
-      console.log(`Exported to ${options.output}`);
+      console.log(`\n✅ Exported ${observations.length} observations to ${options.output}\n`);
     } else {
       console.log(output);
     }
@@ -176,13 +233,34 @@ program
 
 program
   .command('list-ides')
-  .description('List supported IDEs')
+  .description('List all supported IDEs')
   .action(() => {
-    const installer = new IDEInstaller();
-    console.log('Supported IDEs:\n');
-    installer.listSupportedIDEs().forEach(i => {
-      console.log(`  ${i.id.padEnd(12)} ${i.name}`);
-    });
+    const installer = new AutoInstaller();
+    const platform = installer.getPlatformInfo();
+
+    console.log(`\n📋 Supported IDEs (${platform.platform})\n`);
+    console.log('─'.repeat(50));
+
+    const ides = [
+      { id: 'cursor', name: 'Cursor', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'windsurf', name: 'Windsurf', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'kilo', name: 'Kilo Code', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'aider', name: 'Aider', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'continue', name: 'Continue.dev', platforms: ['win32', 'darwin'] },
+      { id: 'cline', name: 'Cline', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'claude', name: 'Claude Code', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'gemini', name: 'Gemini CLI', platforms: ['win32', 'darwin', 'linux'] },
+      { id: 'opencode', name: 'OpenCode', platforms: ['darwin', 'linux'] }
+    ];
+
+    for (const ide of ides) {
+      const supported = ide.platforms.includes(platform.platform as any);
+      const check = supported ? '✅' : '⚠️';
+      console.log(`  ${check}  ${ide.id.padEnd(12)} ${ide.name}`);
+    }
+
+    console.log('─'.repeat(50));
+    console.log('\n💡 Run "npx agent-memory detect" to see which IDEs are installed\n');
   });
 
 program.parse();

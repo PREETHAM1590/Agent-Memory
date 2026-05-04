@@ -1,26 +1,31 @@
 {
   "name": "agent-memory",
   "version": "1.0.0",
-  "description": "Universal AI IDE Memory System - Persistent memory for Cursor, Windsurf, Aider, Kilo, Continue.dev, Cline, and more",
+  "description": "Universal AI IDE Memory System - Auto-detect and install for Cursor, Windsurf, Kilo, Aider, Continue, Cline, Claude Code, Gemini CLI, and more",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "agent-memory": "./dist/cli.js"
   },
+  "exports": {
+    ".": "./dist/index.js",
+    "./mcp": "./dist/mcp/server.js",
+    "./database": "./dist/database/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/cli.js",
+    "start": "node dist/cli.js start",
     "start:worker": "node dist/worker/index.js",
-    "install:ide": "node dist/cli.js install",
+    "install": "node dist/cli.js install",
+    "detect": "node dist/cli.js detect",
+    "mcp": "node dist/cli.js mcp",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
-    "db:migrate": "node dist/database/migrate.js",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "ai",
@@ -33,10 +38,14 @@
     "continue",
     "cline",
     "claude",
+    "gemini",
+    "universal",
+    "auto-detect",
     "persistent-memory",
     "mcp",
     "sqlite",
-    "vector-search"
+    "vector-search",
+    "cross-platform"
   ],
   "author": "PREETHAM1590",
   "license": "MIT",
@@ -44,9 +53,19 @@
     "type": "git",
     "url": "https://github.com/PREETHAM1590/Agent-Memory.git"
   },
+  "bugs": {
+    "url": "https://github.com/PREETHAM1590/Agent-Memory/issues"
+  },
+  "homepage": "https://github.com/PREETHAM1590/Agent-Memory#readme",
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "dist",
+    "web",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -56,6 +75,7 @@
     "commander": "^12.0.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "open": "^10.0.0",
     "glob": "^10.3.0",
     "gray-matter": "^4.0.3",
     "handlebars": "^4.7.8",

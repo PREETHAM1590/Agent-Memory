@@ -1,222 +1,217 @@
 # Agent-Memory
 
-> Universal AI IDE Memory System - Persistent memory across all your coding sessions
+> Universal AI IDE Memory System - Auto-detect and install for ALL your AI IDEs with one command
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
 
-**Agent-Memory** is a universal memory system for ALL AI IDEs that automatically captures everything your AI assistant does during coding sessions, compresses it with AI, and makes it available in future sessions.
+**Agent-Memory** is a universal memory system for ALL AI IDEs. One command auto-detects all installed IDEs on your system and installs Agent-Memory for each one.
 
-## Supported IDEs
+## One-Line Install (Auto-Detect All IDEs)
 
-| IDE | Status | Installation |
-|-----|--------|--------------|
-| Cursor | ✅ Supported | `npx agent-memory install --ide cursor` |
-| Windsurf | ✅ Supported | `npx agent-memory install --ide windsurf` |
-| Kilo Code | ✅ Supported | `npx agent-memory install --ide kilo` |
-| Aider | ✅ Supported | `npx agent-memory install --ide aider` |
-| Continue.dev | ✅ Supported | `npx agent-memory install --ide continue` |
-| Cline | ✅ Supported | `npx agent-memory install --ide cline` |
-| Claude Code | ✅ Supported | `npx agent-memory install --ide claude` |
-| Gemini CLI | ✅ Supported | `npx agent-memory install --ide gemini` |
+```bash
+npx agent-memory install
+```
 
-## Features
+That's it! Agent-Memory will:
+1. ✅ Detect ALL installed AI IDEs on your system
+2. ✅ Install and configure for each detected IDE
+3. ✅ Set up the memory database
+4. ✅ Create IDE-specific rules files
 
-### Core Features
-- **Persistent Memory** - Context survives across sessions and IDE restarts
-- **Universal IDE Support** - Works with ALL major AI coding assistants
-- **One-Click Install** - Single command setup for any supported IDE
-- **Smart Summarization** - AI-powered auto-summarization with multiple compression levels
-- **Auto-Tagging** - AI-powered automatic categorization of observations
-- **Learning Mode** - Extract patterns from successful sessions automatically
+## Supported IDEs (9+)
 
-### Advanced Features
-- **Cloud Sync** - Optional cloud backup & sync across devices
-- **Team Sharing** - Share memory across team members with permissions
-- **Memory Analytics Dashboard** - Visual insights: top topics, patterns, productivity metrics
-- **Code Pattern Library** - Extract and store reusable code patterns automatically
-- **Decision Tree Visualization** - Visual graph of past decisions and their outcomes
-- **Git Integration** - Link memories to commits, branches, PRs automatically
-- **Project Templates** - Create project memory templates for quick setup
-- **REST API + Webhooks** - Full API for integrations
-- **Self-Hosted** - Docker/Kubernetes deployment guides
-- **Memory Export/Import** - Export to JSON/CSV/Markdown
-- **Voice Notes** - Voice-to-text memory capture via web interface
-- **Knowledge Graph View** - Visual relationship map of concepts
-- **Conflict Resolution** - Detect and resolve contradictory past decisions
-- **Plugin Ecosystem** - Extend with community plugins
+| IDE | Windows | macOS | Linux | Detection Method |
+|-----|:-------:|:-----:|:-----:|------------------|
+| Cursor | ✅ | ✅ | ✅ | App, config folder, binary |
+| Windsurf | ✅ | ✅ | ✅ | App, config folder, binary |
+| Kilo Code | ✅ | ✅ | ✅ | Config folder, binary |
+| Aider | ✅ | ✅ | ✅ | Binary, config folder |
+| Continue.dev | ✅ | ✅ | - | Config folder |
+| Cline | ✅ | ✅ | ✅ | Config folder |
+| Claude Code | ✅ | ✅ | ✅ | Binary, config folder |
+| Gemini CLI | ✅ | ✅ | ✅ | Binary, config folder |
+| OpenCode | - | ✅ | ✅ | Binary |
 
 ## Quick Start
 
 ```bash
-# Install for your IDE (auto-detect)
+# Auto-detect and install for ALL detected IDEs
 npx agent-memory install
 
-# Or specify IDE
+# Just detect what's installed (no changes)
+npx agent-memory detect
+
+# Install for a specific IDE
 npx agent-memory install --ide cursor
+
+# Install for ALL supported IDEs (even if not detected)
+npx agent-memory install --all
 
 # Start the memory worker
 npx agent-memory start
 
-# Open web viewer
+# Open web dashboard
 npx agent-memory web
+```
+
+## Platform Support
+
+### Windows
+```powershell
+# Detects IDEs from:
+# - C:\Program Files\*\
+# - C:\Users\%USER%\AppData\Local\Programs\
+# - Config folders in %USERPROFILE%
+# - PATH (using 'where' command)
+
+npx agent-memory install
+```
+
+### macOS
+```bash
+# Detects IDEs from:
+# - /Applications/*.app
+# - ~/Applications/*.app
+# - Config folders in ~
+# - PATH (using 'which' command)
+
+npx agent-memory install
+```
+
+### Linux
+```bash
+# Detects IDEs from:
+# - Config folders in ~
+# - PATH (using 'which' command)
+# - /usr/bin, /usr/local/bin, /snap/bin
+
+npx agent-memory install
+```
+
+## Features
+
+### Core Features
+- **Auto-Detection** - Automatically finds all installed AI IDEs
+- **Cross-Platform** - Windows, macOS, and Linux support
+- **Persistent Memory** - Context survives across sessions
+- **Smart Summarization** - AI-powered compression
+- **Auto-Tagging** - Automatic categorization
+
+### Advanced Features
+- **Cloud Sync** - Backup & sync across devices
+- **Team Sharing** - Share with permissions
+- **Analytics Dashboard** - Visual insights
+- **Code Patterns** - Extract reusable patterns
+- **Git Integration** - Link to commits/PRs
+- **REST API + Webhooks** - Full API access
+- **Docker/K8s** - Self-hosted deployment
+- **Export/Import** - JSON/CSV/Markdown
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npx agent-memory install` | Auto-detect and install for all detected IDEs |
+| `npx agent-memory detect` | List all detected IDEs (no changes) |
+| `npx agent-memory start` | Start the memory worker on port 37800 |
+| `npx agent-memory web` | Open the web dashboard |
+| `npx agent-memory search "query"` | Search memory |
+| `npx agent-memory stats` | Show memory statistics |
+| `npx agent-memory export json` | Export all memories |
+| `npx agent-memory list-ides` | List all supported IDEs |
+
+## After Installation
+
+1. **Restart your IDE(s)** to load the new MCP server
+2. **Start the worker**: `npx agent-memory start`
+3. **Open dashboard**: http://localhost:37800
+
+## MCP Tools (Available in All IDEs)
+
+| Tool | Description |
+|------|-------------|
+| `memory_search` | Search memory with filters |
+| `memory_timeline` | Get chronological context |
+| `memory_get_observations` | Fetch full details |
+| `memory_store` | Store new observation |
+| `memory_analytics` | Get statistics |
+
+## Example Usage in IDE
+
+```
+# Search for past decisions
+memory_search(query="database decisions")
+
+# Store a new decision
+memory_store(type="decision", title="Use PostgreSQL", content="Chose PostgreSQL for ...")
+
+# Get recent context
+memory_analytics()
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Agent-Memory System                       │
+│                    Your System                               │
 ├─────────────────────────────────────────────────────────────┤
-│                                                              │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │  Cursor  │  │ Windsurf │  │   Kilo   │  │  Aider   │    │
+│  │  Cursor  │  │ Windsurf │  │   Kilo   │  │  Claude  │    │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘    │
 │       │             │             │             │           │
 │       └─────────────┴─────────────┴─────────────┘           │
 │                          │                                   │
 │                    ┌─────▼─────┐                            │
-│                    │ MCP Server │                            │
+│                    │ MCP Server │  ← npx agent-memory mcp   │
 │                    └─────┬─────┘                            │
 │                          │                                   │
 │       ┌──────────────────┼──────────────────┐               │
 │       │                  │                  │               │
 │  ┌────▼────┐       ┌─────▼─────┐      ┌────▼────┐         │
-│  │ SQLite  │       │  Vector   │      │  Cloud  │         │
-│  │   DB    │       │   Search  │      │  Sync   │         │
+│  │ SQLite  │       │  Worker   │      │  Web    │         │
+│  │   DB    │       │ :37800    │      │Dashboard│         │
 │  └─────────┘       └───────────┘      └─────────┘         │
-│                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Documentation
+## Self-Hosting (Docker)
 
-- [Installation Guide](./docs/installation.md)
-- [Configuration](./docs/configuration.md)
-- [API Reference](./docs/api.md)
-- [IDE Integration](./docs/ide-integration.md)
-- [Cloud Sync Setup](./docs/cloud-sync.md)
-- [Team Sharing](./docs/team-sharing.md)
-- [Plugin Development](./docs/plugins.md)
+```bash
+# Quick start with Docker
+docker run -d -p 37800:37800 -v agent-memory-data:/data preetham1590/agent-memory
+
+# Or with Docker Compose
+git clone https://github.com/PREETHAM1590/Agent-Memory.git
+cd Agent-Memory
+docker-compose up -d
+```
 
 ## Configuration
 
-Settings are stored in `~/.agent-memory/config.json`:
+Config file: `~/.agent-memory/config.json`
 
 ```json
 {
   "port": 37800,
-  "database": "~/.agent-memory/memory.db",
-  "cloudSync": {
-    "enabled": false,
-    "provider": "none"
-  },
-  "summarization": {
-    "enabled": true,
-    "compressionLevel": "medium"
-  },
-  "learning": {
-    "enabled": true,
-    "patternExtraction": true
-  }
+  "database": "~/.agent-memory/data/memory.db",
+  "cloudSync": { "enabled": false },
+  "summarization": { "enabled": true, "compressionLevel": "medium" },
+  "learning": { "enabled": true }
 }
 ```
 
-## MCP Tools
-
-Agent-Memory provides 5 MCP tools for IDE integration:
-
-1. **`memory_search`** - Search memory index with filters
-2. **`memory_timeline`** - Get chronological context
-3. **`memory_get`** - Fetch full observation details
-4. **`memory_store`** - Store new observation
-5. **`memory_analytics`** - Get usage analytics
-
-## Web Viewer
-
-Access the web viewer at `http://localhost:37800`:
-
-- Real-time memory stream
-- Analytics dashboard
-- Knowledge graph visualization
-- Decision tree view
-- Team sharing management
-- Settings configuration
-
-## Self-Hosting
-
-```bash
-# Docker
-docker run -d -p 37800:37800 -v agent-memory-data:/data preetham1590/agent-memory
-
-# Docker Compose
-docker-compose up -d
-
-# Kubernetes
-kubectl apply -f deploy/kubernetes/
-```
-
-## API Usage
-
-```javascript
-import { AgentMemory } from 'agent-memory';
-
-const memory = new AgentMemory({
-  database: './memory.db'
-});
-
-// Store observation
-await memory.store({
-  type: 'decision',
-  title: 'Use PostgreSQL for main database',
-  content: '...',
-  tags: ['database', 'architecture']
-});
-
-// Search memory
-const results = await memory.search('database decision', {
-  type: 'decision',
-  limit: 10
-});
-```
-
-## Plugin Ecosystem
-
-Create plugins to extend Agent-Memory:
-
-```javascript
-// my-plugin.js
-export default {
-  name: 'my-plugin',
-  version: '1.0.0',
-  hooks: {
-    'observation:store': async (observation) => {
-      // Modify observation before storage
-      return observation;
-    },
-    'observation:search': async (query, results) => {
-      // Modify search results
-      return results;
-    }
-  }
-};
-```
-
-## Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md).
-
 ## License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+MIT License - see [LICENSE](./LICENSE)
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/PREETHAM1590/Agent-Memory/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/PREETHAM1590/Agent-Memory/discussions)
-- **Documentation**: [docs.agent-memory.io](https://docs.agent-memory.io)
+- **Repository**: [github.com/PREETHAM1590/Agent-Memory](https://github.com/PREETHAM1590/Agent-Memory)
 
 ---
 
-**Built with TypeScript** | **Powered by MCP** | **Made for AI-Assisted Development**
+**Built with TypeScript** | **Cross-Platform** | **One-Command Install**
